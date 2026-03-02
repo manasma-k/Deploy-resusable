@@ -1,4 +1,4 @@
-name: Reusable Azure Terraform Deployment
+name: deploy-reusable
 
 on:
   workflow_call:

@@ -8,7 +8,7 @@ This repository exposes a reusable GitHub Actions workflow to deploy Terraform r
 
 Workflow path:
 
-- `.github/workflows/deploy-landingzone-root-module.yml`
+- `.github/workflows/deploy-reusable.yml`
 
 ### Required caller secrets
 
@@ -26,7 +26,7 @@ on:
 
 jobs:
 	deploy-foundation-dev:
-		uses: manasma-k/Deploy-resusable/.github/workflows/deploy-landingzone-root-module.yml@main
+		uses: manasma-k/Deploy-resusable/.github/workflows/deploy-reusable.yml@main
 		with:
 			environment: dev
 			module_path: environments/dev/foundation
