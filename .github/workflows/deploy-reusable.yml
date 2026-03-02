@@ -37,7 +37,7 @@ jobs:
 
     env:
       TF_IN_AUTOMATION: true
-      WORKDIR: environments/${{ inputs.environment }}/${{ inputs.application }}
+      WORKDIR: environment/${{ inputs.environment }}/${{ inputs.application }}
 
     steps:
     - name: Checkout Repository
@@ -98,7 +98,7 @@ jobs:
 
     env:
       TF_IN_AUTOMATION: true
-      WORKDIR: environments/${{ inputs.environment }}/${{ inputs.application }}
+      WORKDIR: environment/${{ inputs.environment }}/${{ inputs.application }}
 
     steps:
     - name: Checkout Repository
