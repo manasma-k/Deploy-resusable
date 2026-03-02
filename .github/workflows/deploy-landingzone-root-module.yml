@@ -1,0 +1,141 @@
+name: Reusable Azure Terraform Deployment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Target environment (dev/prod)
+        required: true
+        type: string
+
+      application:
+        description: Application folder name
+        required: true
+        type: string
+
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+      STATE_RG:
+        required: true
+      STATE_STORAGE:
+        required: true
+
+jobs:
+  plan_validate:
+    name: Plan + Validate ${{ inputs.environment }} / ${{ inputs.application }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      TF_IN_AUTOMATION: true
+      WORKDIR: environments/${{ inputs.environment }}/${{ inputs.application }}
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Validate directory
+      run: |
+        if [ ! -d "$WORKDIR" ]; then
+          echo "Directory $WORKDIR not found"
+          exit 1
+        fi
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Terraform Init
+      working-directory: ${{ env.WORKDIR }}
+      run: |
+        terraform init \
+          -backend-config="resource_group_name=${{ secrets.STATE_RG }}" \
+          -backend-config="storage_account_name=${{ secrets.STATE_STORAGE }}" \
+          -backend-config="container_name=terraform-state" \
+          -backend-config="key=${{ inputs.environment }}/${{ inputs.application }}/terraform.tfstate"
+
+    - name: Terraform Validate
+      working-directory: ${{ env.WORKDIR }}
+      run: terraform validate
+
+    - name: Terraform Plan
+      working-directory: ${{ env.WORKDIR }}
+      run: terraform plan -out=tfplan
+
+    - name: Upload plan artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tfplan-${{ inputs.environment }}-${{ inputs.application }}
+        path: ${{ env.WORKDIR }}/tfplan
+        retention-days: 1
+
+  deploy:
+    name: Deploy ${{ inputs.environment }} / ${{ inputs.application }}
+    runs-on: ubuntu-latest
+    needs: plan_validate
+
+    environment:
+      name: ${{ inputs.environment }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      TF_IN_AUTOMATION: true
+      WORKDIR: environments/${{ inputs.environment }}/${{ inputs.application }}
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Validate directory
+      run: |
+        if [ ! -d "$WORKDIR" ]; then
+          echo "Directory $WORKDIR not found"
+          exit 1
+        fi
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Terraform Init
+      working-directory: ${{ env.WORKDIR }}
+      run: |
+        terraform init \
+          -backend-config="resource_group_name=${{ secrets.STATE_RG }}" \
+          -backend-config="storage_account_name=${{ secrets.STATE_STORAGE }}" \
+          -backend-config="container_name=terraform-state" \
+          -backend-config="key=${{ inputs.environment }}/${{ inputs.application }}/terraform.tfstate"
+
+    - name: Download plan artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: tfplan-${{ inputs.environment }}-${{ inputs.application }}
+        path: ${{ env.WORKDIR }}
+
+    - name: Terraform Apply
+      working-directory: ${{ env.WORKDIR }}
+      run: terraform apply -auto-approve tfplan
