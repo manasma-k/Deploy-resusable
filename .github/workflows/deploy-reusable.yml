@@ -13,6 +13,12 @@ on:
         required: true
         type: string
 
+      module_path:
+        description: Optional explicit Terraform root module path
+        required: false
+        default: ""
+        type: string
+
     secrets:
       AZURE_CLIENT_ID:
         required: true
@@ -39,7 +45,6 @@ jobs:
 
     env:
       TF_IN_AUTOMATION: true
-      WORKDIR: environment/${{ inputs.environment }}/${{ inputs.application }}
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -49,12 +54,30 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Validate directory
+    - name: Resolve Terraform directory
       run: |
+        if [ -n "${{ inputs.module_path }}" ]; then
+          WORKDIR="${{ inputs.module_path }}"
+        elif [ -d "environments/${{ inputs.environment }}/${{ inputs.application }}" ]; then
+          WORKDIR="environments/${{ inputs.environment }}/${{ inputs.application }}"
+        else
+          WORKDIR="environment/${{ inputs.environment }}/${{ inputs.application }}"
+        fi
+
         if [ ! -d "$WORKDIR" ]; then
-          echo "Directory $WORKDIR not found"
+          echo "Directory $WORKDIR not found in caller repository"
           exit 1
         fi
+
+        if ! find "$WORKDIR" -maxdepth 1 -name "*.tf" -type f | grep -q .; then
+          echo "No Terraform .tf files found in $WORKDIR"
+          echo "Contents of $WORKDIR:"
+          ls -la "$WORKDIR"
+          exit 1
+        fi
+
+        echo "WORKDIR=$WORKDIR" >> "$GITHUB_ENV"
+        echo "Using WORKDIR=$WORKDIR"
 
     - name: Azure Login
       uses: azure/login@v2
@@ -102,7 +125,6 @@ jobs:
 
     env:
       TF_IN_AUTOMATION: true
-      WORKDIR: environment/${{ inputs.environment }}/${{ inputs.application }}
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -112,12 +134,23 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Validate directory
+    - name: Resolve Terraform directory
       run: |
+        if [ -n "${{ inputs.module_path }}" ]; then
+          WORKDIR="${{ inputs.module_path }}"
+        elif [ -d "environments/${{ inputs.environment }}/${{ inputs.application }}" ]; then
+          WORKDIR="environments/${{ inputs.environment }}/${{ inputs.application }}"
+        else
+          WORKDIR="environment/${{ inputs.environment }}/${{ inputs.application }}"
+        fi
+
         if [ ! -d "$WORKDIR" ]; then
-          echo "Directory $WORKDIR not found"
+          echo "Directory $WORKDIR not found in caller repository"
           exit 1
         fi
+
+        echo "WORKDIR=$WORKDIR" >> "$GITHUB_ENV"
+        echo "Using WORKDIR=$WORKDIR"
 
     - name: Azure Login
       uses: azure/login@v2
